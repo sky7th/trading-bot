@@ -5,14 +5,14 @@ from PyQt5.QtTest import *
 
 
 class Kiwoom(QAxWidget):
+
+    USE_MONEY_PERCENT = 0.5
+    SCREEN_MY_INFO = "2000"
+    SCREEN_CALCULATION_STOCK = "4000"
+    KOSDAQ_NUM = "10"
+
     def __init__(self):
         super().__init__()
-
-        self.KOSDAQ_NUM = "10"
-
-        # 스크린번호
-        self.SCREEN_MY_INFO = "2000"
-        self.SCREEN_CALCULATION_STOCK = "4000"
 
         self.deposit = None
         self.deposit_ok = None
@@ -24,7 +24,6 @@ class Kiwoom(QAxWidget):
         # 계좌 관련 변수
         self.account_num = None
         self.use_money = 0
-        self.USE_MONEY_PERCENT = 0.5
 
         # eventloop
         self.login_event_loop = QEventLoop()
@@ -115,16 +114,14 @@ class Kiwoom(QAxWidget):
         self.dynamicCall("SetInputValue(String, String)", "비밀번호", "0000")
         self.dynamicCall("SetInputValue(String, String)", "비밀번호입력매체구분", "00")
         self.dynamicCall("SetInputValue(String, String)", "조회구분", "2")
-        self.dynamicCall("CommRqData(String, String, int, String)", "계좌평가잔고내역요청", "opw00018", sPrevNext,
-                         self.SCREEN_MY_INFO)
+        self.dynamicCall("CommRqData(String, String, int, String)", "계좌평가잔고내역요청", "opw00018", sPrevNext, self.SCREEN_MY_INFO)
         self.account_detail_event_loop.exec_()
 
     def signal_account_detail_mystock_not_concluded(self, sPrevNext="0"):
         self.dynamicCall("SetInputValue(QString, QString)", "계좌번호", self.account_num)
         self.dynamicCall("SetInputValue(QString, QString)", "체결구분", "1")
         self.dynamicCall("SetInputValue(QString, QString)", "매매구분", "0")
-        self.dynamicCall("CommRqData(String, String, int, String)", "실시간미체결요청", "opt10075", sPrevNext,
-                         self.SCREEN_MY_INFO)
+        self.dynamicCall("CommRqData(String, String, int, String)", "실시간미체결요청", "opt10075", sPrevNext, self.SCREEN_MY_INFO)
         self.account_detail_event_loop.exec_()
 
     def get_acount_num(self):
@@ -144,13 +141,10 @@ class Kiwoom(QAxWidget):
             code = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "종목코드")
             code_nm = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "종목명")
             order_no = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "주문번호")
-            order_status = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i,
-                                            "주문상태")  # 접수, 확인, 체결
-            order_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i,
-                                              "주문수량")
+            order_status = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "주문상태")  # 접수, 확인, 체결
+            order_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "주문수량")
             order_price = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "주문가격")
-            order_classification = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i,
-                                                    "주문구분")  # -매도, +매수, 정정주문, 취소주문
+            order_classification = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "주문구분")  # -매도, +매수, 정정주문, 취소주문
             not_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "미체결수량")
             ok_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "체결량")
 
@@ -173,22 +167,19 @@ class Kiwoom(QAxWidget):
 
     def set_mystock_details(self, sRQName, sTrCode, sPrevNext):
         self.total_buy_money = self.dynamicCall("GetCommData(String, String, int, String)", sTrCode, sRQName, 0, "총매입금액")
-        self.total_profit_loss_rate = self.dynamicCall("GetCommData(String, String, int, String)", sTrCode, sRQName, 0,
-                                                  "총수익률(%)")
+        self.total_profit_loss_rate = self.dynamicCall("GetCommData(String, String, int, String)", sTrCode, sRQName, 0, "총수익률(%)")
+
         row_size = self.dynamicCall("GetRepeatCnt(QString, QString", sTrCode, sRQName)
 
         for i in range(row_size):
             code = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "종목번호")
             code_nm = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "종목명")
-            stock_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i,
-                                              "보유수량")
+            stock_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "보유수량")
             buy_price = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "매입가")
             learn_rate = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "수익률(%)")
             current_price = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "현재가")
-            total_buy_price = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i,
-                                               "매입금액")
-            possible_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i,
-                                                 "매매가능수량")
+            total_buy_price = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "매입금액")
+            possible_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "매매가능수량")
 
             code = code.strip()[1:]
             if code not in self.mystock_dict:
