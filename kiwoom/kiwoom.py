@@ -9,9 +9,12 @@ from buyingLaw import granvileLaw
 class Kiwoom(QAxWidget):
 
     USE_MONEY_PERCENT = 0.5
+    KOSDAQ_NUM = "10"
+
     SCREEN_MY_INFO = "2000"
     SCREEN_CALCULATION_STOCK = "4000"
-    KOSDAQ_NUM = "10"
+    SCREEN_REAL_STOCK = "5000"  # 종목별로 할당할 스크린 번호
+    SCREEN_REAL_SAILING_STOCK = "6000"  # 종목별로 할당할 주문용 스크린 번호
 
     def __init__(self):
         super().__init__()
@@ -22,6 +25,7 @@ class Kiwoom(QAxWidget):
         self.total_profit_loss_rate = None
         self.mystock_dict = {}
         self.mystock_not_concluded_dict = {}
+        self.portfolio_stock_dict = {}
 
         self.analysis_data = []
 
@@ -44,7 +48,9 @@ class Kiwoom(QAxWidget):
         self.signal_account_detail_mystock()  # 계좌평가잔고내역요청
         self.signal_account_detail_mystock_not_concluded()  # 실시간미체결요청
 
-        self.analyze_chart()  # 종목 분석용, 임시용으로 실행
+        # self.analyze_chart()  # 종목 분석용, 임시용으로 실행
+
+        self.set_portfolio_stock_dict()  # 스크린 번호를 할당
 
         print("내 계좌번호: %s" % self.account_num)
 
@@ -103,7 +109,7 @@ class Kiwoom(QAxWidget):
             else:
                 if granvileLaw.is_possible_4th_law(self.analysis_data):
                     code_nm = self.dynamicCall("GetMasterCodeName(QString)", code)
-                    utils.save_information_of_item_in_text_file(str(self.analysis_data[0][1]), code, code_nm)
+                    utils.save_stock_info(code, code_nm, str(self.analysis_data[0][1]))
 
                 self.analysis_data.clear()
                 self.analysis_event_loop.exit()
@@ -226,7 +232,6 @@ class Kiwoom(QAxWidget):
             data.append(int(high_price.strip()))
             data.append(int(low_price.strip()))
             data.append("")
-
             self.analysis_data.append(data)
 
     def analyze_chart(self):
@@ -250,8 +255,29 @@ class Kiwoom(QAxWidget):
             self.dynamicCall("SetInputValue(QString, QString)", "기준일자", date)
 
         self.dynamicCall("CommRqData(QString, QString, int, QString", "주식일봉차트조회", "opt10081", sPrevNext, self.SCREEN_CALCULATION_STOCK)  # Tr서버로 전송 - Transaction
-
         self.analysis_event_loop.exec_()
 
+    def set_portfolio_stock_dict(self):
+        self.portfolio_stock_dict = utils.read_stock_info()
+        combined_list = list(self.mystock_dict.keys()) + list(self.portfolio_stock_dict.keys())
+        combined_list += [self.mystock_not_concluded_dict[order_no]["종목코드"] for order_no in list(self.mystock_not_concluded_dict.keys())]
+        set_list = list(set(combined_list))
 
+        for idx, code in enumerate(set_list):
+            screen_num = int(self.SCREEN_REAL_STOCK)
+            sailing_screen_num = int(self.SCREEN_REAL_SAILING_STOCK)
+
+            if (idx % 50) == 0:
+                screen_num += 1
+                self.SCREEN_REAL_STOCK = str(screen_num)
+
+            if (idx % 50) == 0:
+                sailing_screen_num += 1
+                self.SCREEN_REAL_SAILING_STOCK = str(sailing_screen_num)
+
+            if code in self.portfolio_stock_dict.keys():
+                self.portfolio_stock_dict[code].update({"스크린번호": str(self.SCREEN_REAL_STOCK)})
+                self.portfolio_stock_dict[code].update({"주문용스크린번호": str(self.SCREEN_REAL_SAILING_STOCK)})
+            else:
+                self.portfolio_stock_dict.update({code: {"스크린번호": str(self.SCREEN_REAL_STOCK), "주문용스크린번호": str(self.SCREEN_REAL_SAILING_STOCK)}})
 
