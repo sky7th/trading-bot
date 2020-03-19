@@ -83,6 +83,7 @@ class Kiwoom(QAxWidget):
             print("계좌 내 미체결 종목 내역: %s" % self.mystock_not_concluded_dict)
 
         elif sRQName == "주식일봉차트조회":
+            self.set_analysis_data(sRQName, sTrCode)
             code = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, 0, "종목코드")
             code = code.strip()
             print("%s 일봉데이터 요청" % code)
@@ -194,8 +195,31 @@ class Kiwoom(QAxWidget):
             mystock_dict_item.update({"매입금액": int(total_buy_price.strip())})
             mystock_dict_item.update({"매매가능수량": int(possible_quantity.strip())})
 
-        if sPrevNext == "2":
-            self.signal_account_detail_mystock(sPrevNext="2")
+    def set_analysis_data(self, sRQName, sTrCode):
+        row_size = self.dynamicCall("GetRepeatCnt(QString, QString)", sTrCode, sRQName)
+
+        for i in range(row_size):
+            data = []
+
+            current_price = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "현재가")
+            value = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "거래량")
+            trading_value = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "거래대금")
+            date = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "일자")
+            start_price = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "시가")
+            high_price = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "고가")
+            low_price = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "저가")
+
+            data.append("")
+            data.append(int(current_price.strip()))
+            data.append(int(value.strip()))
+            data.append(int(trading_value.strip()))
+            data.append(date.strip())
+            data.append(int(start_price.strip()))
+            data.append(int(high_price.strip()))
+            data.append(int(low_price.strip()))
+            data.append("")
+
+            self.analysis_data.append(data)
 
     def analyze_chart(self):
         code_list = self.get_code_list_by_market(self.KOSDAQ_NUM)
