@@ -7,19 +7,19 @@ class Kiwoom(QAxWidget):
     def __init__(self):
         super().__init__()
 
-        ###### eventloop 모음
-        self.__login_event_loop = None
+        # eventloop 모음
+        self.__login_event_loop = QEventLoop()
         self.__detail_account_info_event_loop = QEventLoop()
 
-        ###### 스크린번호 모음
+        # 스크린번호 모음
         self.screen_my_info = "2000"
 
-        ###### 변수 모음
+        # 변수 모음
         self.__account_num = None
-        self.__account_stock_dict = {}
-        self.__not_account_stock_dict = {}
+        self.mystock_dict = {}
+        self.mystock_not_concluded_dict = {}
 
-        ###### 계좌 관련 변수 모음
+        # 계좌 관련 변수 모음
         self.__use_money = 0
         self.__use_money_percent = 0.5
 
@@ -28,9 +28,9 @@ class Kiwoom(QAxWidget):
 
         self.signal_login_commConnect()
         self.get_acount_info()
-        self.detail_account_info()  # 예수금 요청
-        self.detail_account_mystock()  # 계좌평가 잔고 내역 요청
-        self.not_concluded_account()  # 미체결 요청
+        self.signal_account_detail_info()  # 예수금 요청
+        self.signal_account_detail_mystock()  # 계좌평가 잔고 내역 요청
+        self.signal_account_detail__mystock_not_concluded()  # 미체결 요청
 
     def __get_ocx_instance(self):
         self.setControl('KHOPENAPI.KHOpenAPICtrl.1')
@@ -78,24 +78,25 @@ class Kiwoom(QAxWidget):
                 possible_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "매매가능수량")
 
                 code = code.strip()[1:]
-                if code not in self.__account_stock_dict:
-                    self.__account_stock_dict.update({code: {}})
+                if code not in self.mystock_dict:
+                    self.mystock_dict.update({code: {}})
 
-                self.__account_stock_dict[code].update({"종목명": code_nm.strip()})
-                self.__account_stock_dict[code].update({"보유수량": int(stock_quantity.strip())})
-                self.__account_stock_dict[code].update({"매입가": int(buy_price.strip())})
-                self.__account_stock_dict[code].update({"수익률(%)": float(learn_rate.strip())})
-                self.__account_stock_dict[code].update({"현재가": int(current_price.strip())})
-                self.__account_stock_dict[code].update({"매입금액": int(total_buy_price.strip())})
-                self.__account_stock_dict[code].update({"매매가능수량": int(possible_quantity.strip())})
+                mystock_dict_item = self.mystock_dict[code]
+                mystock_dict_item.update({"종목명": code_nm.strip()})
+                mystock_dict_item.update({"보유수량": int(stock_quantity.strip())})
+                mystock_dict_item.update({"매입가": int(buy_price.strip())})
+                mystock_dict_item.update({"수익률(%)": float(learn_rate.strip())})
+                mystock_dict_item.update({"현재가": int(current_price.strip())})
+                mystock_dict_item.update({"매입금액": int(total_buy_price.strip())})
+                mystock_dict_item.update({"매매가능수량": int(possible_quantity.strip())})
 
             if sPrevNext == "2":
-                self.detail_account_mystock(sPrevNext="2")
+                self.signal_account_detail_mystock(sPrevNext="2")
             else:
                 print("총매입금액: %s" % int(total_buy_money))
                 print("총수익률(%%): %s" % float(total_profit_loss_rate))
-                print("계좌 내 종목 개수: %s" % len(self.__account_stock_dict))
-                print("계좌 내 종목 내역: %s" % self.__account_stock_dict)
+                print("계좌 내 종목 개수: %s" % len(self.mystock_dict))
+                print("계좌 내 종목 내역: %s" % self.mystock_dict)
                 self.__detail_account_info_event_loop.exit()
 
         elif sRQName == "실시간미체결요청":
@@ -113,26 +114,26 @@ class Kiwoom(QAxWidget):
                 ok_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "체결량")
 
                 order_no = order_no.strip()
-                if order_no not in self.__not_account_stock_dict:
-                    self.__not_account_stock_dict[order_no] = {}
+                if order_no not in self.mystock_not_concluded_dict:
+                    self.mystock_not_concluded_dict[order_no] = {}
 
-                self.__not_account_stock_dict[order_no].update({"종목코드": code.strip()})
-                self.__not_account_stock_dict[order_no].update({"종목명": code_nm.strip()})
-                self.__not_account_stock_dict[order_no].update({"주문번호": order_no})
-                self.__not_account_stock_dict[order_no].update({"주문상태": order_status.strip()})
-                self.__not_account_stock_dict[order_no].update({"주문수량": int(order_quantity.strip())})
-                self.__not_account_stock_dict[order_no].update({"주문가격": int(order_price.strip())})
-                self.__not_account_stock_dict[order_no].update({"주문구분": order_classification.strip().lstrip("+").lstrip("-")})
-                self.__not_account_stock_dict[order_no].update({"미체결수량": int(not_quantity.strip())})
-                self.__not_account_stock_dict[order_no].update({"체결량": int(ok_quantity.strip())})
+                mystock_not_concluded_dict_item = self.mystock_not_concluded_dict[order_no]
+                mystock_not_concluded_dict_item.update({"종목코드": code.strip()})
+                mystock_not_concluded_dict_item.update({"종목명": code_nm.strip()})
+                mystock_not_concluded_dict_item.update({"주문번호": order_no})
+                mystock_not_concluded_dict_item.update({"주문상태": order_status.strip()})
+                mystock_not_concluded_dict_item.update({"주문수량": int(order_quantity.strip())})
+                mystock_not_concluded_dict_item.update({"주문가격": int(order_price.strip())})
+                mystock_not_concluded_dict_item.update({"주문구분": order_classification.strip().lstrip("+").lstrip("-")})
+                mystock_not_concluded_dict_item.update({"미체결수량": int(not_quantity.strip())})
+                mystock_not_concluded_dict_item.update({"체결량": int(ok_quantity.strip())})
 
-            print("계좌 내 미체결 종목 개수: %s" % len(self.__not_account_stock_dict))
-            print("계좌 내 미체결 종목 내역: %s" % self.__not_account_stock_dict)
+            print("계좌 내 미체결 종목 개수: %s" % len(self.mystock_not_concluded_dict))
+            print("계좌 내 미체결 종목 내역: %s" % self.mystock_not_concluded_dict)
             self.__detail_account_info_event_loop.exit()
 
     def signal_login_commConnect(self):
         self.dynamicCall('CommConnect()')
-        self.__login_event_loop = QEventLoop()
         self.__login_event_loop.exec_()
 
     def get_acount_info(self):
@@ -140,7 +141,7 @@ class Kiwoom(QAxWidget):
         self.__account_num = account_list.split(":")[0][:-1]
         print("내 계좌번호: %s" % self.__account_num)
 
-    def detail_account_info(self):
+    def signal_account_detail_info(self):
         self.dynamicCall("SetInputValue(String, String)", "계좌번호", self.__account_num)
         self.dynamicCall("SetInputValue(String, String)", "비밀번호", "0000")
         self.dynamicCall("SetInputValue(String, String)", "비밀번호입력매체구분", "00")
@@ -148,7 +149,7 @@ class Kiwoom(QAxWidget):
         self.dynamicCall("CommRqData(String, String, int, String)", "예수금상세현황요청", "opw00001", "0", self.screen_my_info)
         self.__detail_account_info_event_loop.exec_()
 
-    def detail_account_mystock(self, sPrevNext="0"):
+    def signal_account_detail_mystock(self, sPrevNext="0"):
         self.dynamicCall("SetInputValue(String, String)", "계좌번호", self.__account_num)
         self.dynamicCall("SetInputValue(String, String)", "비밀번호", "0000")
         self.dynamicCall("SetInputValue(String, String)", "비밀번호입력매체구분", "00")
@@ -156,7 +157,7 @@ class Kiwoom(QAxWidget):
         self.dynamicCall("CommRqData(String, String, int, String)", "계좌평가잔고내역요청", "opw00018", sPrevNext, self.screen_my_info)
         self.__detail_account_info_event_loop.exec_()
 
-    def not_concluded_account(self, sPrevNext="0"):
+    def signal_account_detail__mystock_not_concluded(self, sPrevNext="0"):
         self.dynamicCall("SetInputValue(QString, QString)", "계좌번호", self.__account_num)
         self.dynamicCall("SetInputValue(QString, QString)", "체결구분", "1")
         self.dynamicCall("SetInputValue(QString, QString)", "매매구분", "0")
