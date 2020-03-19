@@ -1,7 +1,9 @@
 from PyQt5.QAxContainer import *
 from PyQt5.QtCore import *
-from config.errorCode import *
 from PyQt5.QtTest import *
+from config.errorCode import *
+from config import utils
+from buyingLaw import granvileLaw
 
 
 class Kiwoom(QAxWidget):
@@ -21,6 +23,8 @@ class Kiwoom(QAxWidget):
         self.mystock_dict = {}
         self.mystock_not_concluded_dict = {}
 
+        self.analysis_data = []
+
         # 계좌 관련 변수
         self.account_num = None
         self.use_money = 0
@@ -28,7 +32,7 @@ class Kiwoom(QAxWidget):
         # eventloop
         self.login_event_loop = QEventLoop()
         self.account_detail_event_loop = QEventLoop()
-        self.calculator_event_loop = QEventLoop()
+        self.analysis_event_loop = QEventLoop()
 
         self.__get_ocx_instance()
         self.__event_slots()
@@ -69,34 +73,40 @@ class Kiwoom(QAxWidget):
             self.set_deposit_details(sRQName, sTrCode)
             print("예수금: %s" % int(self.deposit))
             print("출금가능금액: %s" % int(self.deposit_ok))
+            self.account_detail_event_loop.exit()
 
         elif sRQName == "계좌평가잔고내역요청":
             self.set_mystock_details(sRQName, sTrCode, sPrevNext)
-            print("총매입금액: %s" % int(self.total_buy_money))
-            print("총수익률(%%): %s" % float(self.total_profit_loss_rate))
-            print("계좌 내 종목 개수: %s" % len(self.mystock_dict))
-            print("계좌 내 종목 내역: %s" % self.mystock_dict)
+
+            if sPrevNext == "2":
+                self.signal_account_detail_mystock(sPrevNext="2")
+            else:
+                print("총매입금액: %s" % int(self.total_buy_money))
+                print("총수익률(%%): %s" % float(self.total_profit_loss_rate))
+                print("계좌 내 종목 개수: %s" % len(self.mystock_dict))
+                print("계좌 내 종목 내역: %s" % self.mystock_dict)
+                self.account_detail_event_loop.exit()
 
         elif sRQName == "실시간미체결요청":
             self.set_mystock_not_concluded_details(sRQName, sTrCode)
             print("계좌 내 미체결 종목 개수: %s" % len(self.mystock_not_concluded_dict))
             print("계좌 내 미체결 종목 내역: %s" % self.mystock_not_concluded_dict)
+            self.account_detail_event_loop.exit()
 
         elif sRQName == "주식일봉차트조회":
             self.set_analysis_data(sRQName, sTrCode)
             code = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, 0, "종목코드")
             code = code.strip()
-            print("%s 일봉데이터 요청" % code)
-
-            rows = self.dynamicCall("GetRepeatCnt(QString, QString)", sTrCode, sRQName)
-            print(rows)
 
             if sPrevNext == "2":
                 self.signal_bars_of_day(code, sPrevNext="2")
             else:
-                self.calculator_event_loop.exit()
+                if granvileLaw.is_possible_4th_law(self.analysis_data):
+                    code_nm = self.dynamicCall("GetMasterCodeName(QString)", code)
+                    utils.save_information_of_item_in_text_file(str(self.analysis_data[0][1]), code, code_nm)
 
-        self.account_detail_event_loop.exit()
+                self.analysis_data.clear()
+                self.analysis_event_loop.exit()
 
     def signal_login_commConnect(self):
         self.dynamicCall('CommConnect()')
@@ -148,8 +158,6 @@ class Kiwoom(QAxWidget):
             order_classification = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "주문구분")  # -매도, +매수, 정정주문, 취소주문
             not_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "미체결수량")
             ok_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "체결량")
-
-            self.mystock_not_concluded_dict = {}
             order_no = order_no.strip()
 
             if order_no not in self.mystock_not_concluded_dict:
@@ -181,8 +189,8 @@ class Kiwoom(QAxWidget):
             current_price = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "현재가")
             total_buy_price = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "매입금액")
             possible_quantity = self.dynamicCall("GetCommData(QString, QString, int, QString)", sTrCode, sRQName, i, "매매가능수량")
-
             code = code.strip()[1:]
+
             if code not in self.mystock_dict:
                 self.mystock_dict.update({code: {}})
 
@@ -234,7 +242,7 @@ class Kiwoom(QAxWidget):
         return code_list.split(";")[:-1]
 
     def signal_bars_of_day(self, code=None, date=None, sPrevNext="0"):
-        QTest.qWait(3600)
+        QTest.qWait(1600)
         self.dynamicCall("SetInputValue(QString, QString)", "종목코드", code)
         self.dynamicCall("SetInputValue(QString, QString)", "수정주가구분", "1")
 
@@ -243,4 +251,7 @@ class Kiwoom(QAxWidget):
 
         self.dynamicCall("CommRqData(QString, QString, int, QString", "주식일봉차트조회", "opt10081", sPrevNext, self.SCREEN_CALCULATION_STOCK)  # Tr서버로 전송 - Transaction
 
-        self.calculator_event_loop.exec_()
+        self.analysis_event_loop.exec_()
+
+
+
