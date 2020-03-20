@@ -15,7 +15,7 @@ class Kiwoom(QAxWidget):
     SCREEN_MY_INFO = "2000"
     SCREEN_CALCULATION_STOCK = "4000"
     SCREEN_REAL_STOCK = "5000"  # 종목별로 할당할 스크린 번호
-    SCREEN_REAL_SAILING_STOCK = "6000"  # 종목별로 할당할 주문용 스크린 번호
+    SCREEN_REAL_SELLING_STOCK = "6000"  # 종목별로 할당할 주문용 스크린 번호
     SCREEN_REAL_START_STOP = "1000"
 
     def __init__(self):
@@ -30,6 +30,7 @@ class Kiwoom(QAxWidget):
         self.mystock_dict = {}
         self.mystock_not_concluded_dict = {}
         self.portfolio_stock_dict = {}
+        self.jango_dict = {}
 
         self.analysis_data = []
 
@@ -71,6 +72,7 @@ class Kiwoom(QAxWidget):
 
     def __real_event_slots(self):
         self.OnReceiveRealData.connect(self.realdata_slot)
+        self.OnReceiveChejanData.connect(self.chejan_slot)
 
     def login_slot(self, errCode):
         print(errors(errCode))
@@ -128,8 +130,11 @@ class Kiwoom(QAxWidget):
     def realdata_slot(self, sCode, sRealType, sRealData):
         if sRealType == "장시작시간":
             self.print_market_status(sCode, sRealType)
+
         elif sRealType == "주식체결":
             self.update_portfolio_by_real_stock_conclusion(sCode, sRealType)
+            self.trade(sCode)
+            self.cancel_mystock_not_concluded(sCode)
 
     def print_market_status(self, sCode, sRealType):
         status_code = self.dynamicCall("GetCommRealData(QString, int)", sCode, self.typeCode.REALTYPE[sRealType]["장운영구분"])
@@ -171,6 +176,70 @@ class Kiwoom(QAxWidget):
         self.portfolio_stock_dict[sCode].update({"고가": abs(int(i))})
         self.portfolio_stock_dict[sCode].update({"시가": abs(int(j))})
         self.portfolio_stock_dict[sCode].update({"저가": abs(int(k))})
+
+    def trade(self, sCode):
+        my_stock = self.mystock_dict[sCode]
+        now_stock = self.portfolio_stock_dict[sCode]
+
+        if sCode in self.mystock_dict.keys() and sCode not in self.jango_dict.keys():
+            self.sell_mystock(sCode, my_stock, now_stock)
+
+        elif sCode in self.jango_dict.keys():
+            self.sell_jango(sCode)
+        else:
+            self.buy_new_stock(sCode, my_stock, now_stock)
+
+    def sell_mystock(self, sCode, my_stock, now_stock):
+        my_fluctuation = (now_stock["현재가"] - my_stock["매입가"]) / my_stock["매입가"] * 100
+        if my_stock["매매가능수량"] > 0 and (my_fluctuation > 5 or my_fluctuation < -5):
+            order_success = self.dynamicCall(
+                "SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)",
+                ["신규매도", self.portfolio_stock_dict[sCode]["주문용스크린번호"], self.account_num, 2,
+                sCode, my_stock["매매가능수량"], 0, self.typeCode.SENDTYPE["거래구분"]["시장가"], ""])
+            if order_success == 0:
+                print("매도주문 전달 성공")
+                # TODO: 매도 주문 검증 절차
+                del my_stock
+            else:
+                print("매도주문 전달 실패(%s)" % errors(order_success))
+
+    def sell_jango(self, sCode):
+        print("%s %s" % ("잔고 내 신규매도를 함", sCode))
+        # TODO: 잔고 주식 매도
+
+    def buy_new_stock(self, sCode, my_stock, now_stock):
+        if now_stock["등락율"] > 2.0 and sCode not in self.jango_dict:
+            print("%s %s" % ("신규매수를 함", sCode))
+            # TODO: 신규 매수
+
+    def cancel_mystock_not_concluded(self, sCode):
+        not_selling_list = list(self.mystock_not_concluded_dict)
+
+        for order_num in not_selling_list:
+            code = self.mystock_not_concluded_dict[order_num]["종목코드"]
+            my_order_price = self.mystock_not_concluded_dict[order_num]["주문가격"]
+            not_conclusion_quantity = self.mystock_not_concluded_dict[order_num]["미체결수량"]
+            selling_classification = self.mystock_not_concluded_dict[order_num]["매도수구분"]
+
+            if selling_classification == "매수" and not_conclusion_quantity > 0 and self.portfolio_stock_dict[sCode]["(최우선)매도호가"] > my_order_price:
+                print("%s %s" % ("매수취소 한다", sCode))
+                # Todo: 미체결 주식 매수 취소
+            elif not_conclusion_quantity == 0:
+                del self.mystock_not_concluded_dict[order_num]
+
+            if selling_classification == "매도" and not_conclusion_quantity > 0 and self.portfolio_stock_dict[sCode]["(최우선)매수호가"] < my_order_price:
+                print("%s %s" % ("매도취소 한다", sCode))
+                # Todo: 미체결 주식 매도 취소
+            elif not_conclusion_quantity == 0:
+                del self.mystock_not_concluded_dict[order_num]
+
+    def chejan_slot(self, sGubun, nItemCnt, sFidList):
+        sGubun = int(sGubun)
+
+        if sGubun == "0":
+            print("주문체결")
+        elif sGubun == "1":
+            print("잔고")
 
     def signal_login_commConnect(self):
         self.dynamicCall('CommConnect()')
@@ -332,18 +401,18 @@ class Kiwoom(QAxWidget):
 
         for idx, code in enumerate(set_list):
             screen_num = int(self.SCREEN_REAL_STOCK)
-            sailing_screen_num = int(self.SCREEN_REAL_SAILING_STOCK)
+            selling_screen_num = int(self.SCREEN_REAL_SELLING_STOCK)
 
             if (idx % 50) == 0:
                 screen_num += 1
                 self.SCREEN_REAL_STOCK = str(screen_num)
 
             if (idx % 50) == 0:
-                sailing_screen_num += 1
-                self.SCREEN_REAL_SAILING_STOCK = str(sailing_screen_num)
+                selling_screen_num += 1
+                self.SCREEN_REAL_SELLING_STOCK = str(selling_screen_num)
 
             if code in self.portfolio_stock_dict.keys():
                 self.portfolio_stock_dict[code].update({"스크린번호": str(self.SCREEN_REAL_STOCK)})
-                self.portfolio_stock_dict[code].update({"주문용스크린번호": str(self.SCREEN_REAL_SAILING_STOCK)})
+                self.portfolio_stock_dict[code].update({"주문용스크린번호": str(self.SCREEN_REAL_SELLING_STOCK)})
             else:
-                self.portfolio_stock_dict.update({code: {"스크린번호": str(self.SCREEN_REAL_STOCK), "주문용스크린번호": str(self.SCREEN_REAL_SAILING_STOCK)}})
+                self.portfolio_stock_dict.update({code: {"스크린번호": str(self.SCREEN_REAL_STOCK), "주문용스크린번호": str(self.SCREEN_REAL_SELLING_STOCK)}})
