@@ -258,8 +258,7 @@ class Kiwoom(QAxWidget):
         self.analysis_event_loop.exec_()
 
     def set_portfolio_stock_dict(self):
-        self.portfolio_stock_dict = utils.read_stock_info()
-        combined_list = list(self.mystock_dict.keys()) + list(self.portfolio_stock_dict.keys())
+        combined_list = list(self.mystock_dict.keys()) + list(utils.read_stock_info().keys())
         combined_list += [self.mystock_not_concluded_dict[order_no]["종목코드"] for order_no in list(self.mystock_not_concluded_dict.keys())]
         set_list = list(set(combined_list))
 
