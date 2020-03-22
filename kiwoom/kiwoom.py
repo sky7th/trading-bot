@@ -1,7 +1,7 @@
 from PyQt5.QAxContainer import *
 from PyQt5.QtCore import *
 from PyQt5.QtTest import *
-from config.errorCode import *
+from config.returnCode import ReturnCode
 from config import utils
 from config.typeCode import Type as Type
 from buyingLaw import granvileLaw
@@ -73,7 +73,7 @@ class Kiwoom(QAxWidget):
         self.OnReceiveChejanData.connect(self.chejan_slot)
 
     def login_slot(self, errCode):
-        print(errors(errCode))
+        print(ReturnCode.CAUSE[errCode])
         self.login_event_loop.exit()
 
     def trdata_slot(self, sScrNo, sRQName, sTrCode, sRecordName, sPrevNext):
@@ -198,7 +198,7 @@ class Kiwoom(QAxWidget):
                 # TODO: 매도 주문 검증 절차
                 del my_stock
             else:
-                print("매도주문 전달 실패(%s)" % errors(order_success))
+                print("매도주문 전달 실패(%s)" % ReturnCode.CAUSE[order_success])
 
     def sell_jango(self, sCode):
         print("%s %s" % ("잔고 내 신규매도를 함", sCode))
