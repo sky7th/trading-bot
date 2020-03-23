@@ -210,14 +210,14 @@ class Kiwoom(QAxWidget):
                 del self.mystock_not_concluded_dict[order_num]
 
     def chejan_slot(self, sGubun, nItemCnt, sFidList):
-        if int(sGubun) == Type.NUM["주문체결"]:
+        if sGubun == Type.NUM["미체결"]:
             self.update_mystock_not_concluded_by_real()
 
-        elif int(sGubun) == Type.NUM["잔고"]:
+        elif sGubun == Type.NUM["잔고"]:
             self.update_jango_by_real()
 
     def update_mystock_not_concluded_by_real(self):
-        order_number = self.get_chejan_data("주문체결", '주문번호')
+        order_number = self.get_chejan_data(Type.REAL['주문체결']['주문번호'])
         if order_number not in self.mystock_not_concluded_dict.keys():
             self.mystock_not_concluded_dict.update({order_number: {}})
 
@@ -227,7 +227,7 @@ class Kiwoom(QAxWidget):
                 '체결가', '체결량', '현재가', '(최우선)매도호가', '(최우선)매수호가']
 
         for col in cols:
-            col_data = self.get_chejan_data("주문체결", col)
+            col_data = self.get_chejan_data(Type.REAL['주문체결'][col])
 
             if col == '종목코드':
                 mystock_not_concluded_dict_item.update({col: col_data[1:].strip()})
@@ -240,17 +240,19 @@ class Kiwoom(QAxWidget):
             else:
                 mystock_not_concluded_dict_item.update({col: col_data.strip()})
 
-    def update_jango_by_real(self):
-        code = self.get_chejan_data("잔고", '종목코드')[1:]
+    def update_jango_by_real(self, code=None):
+        if code is None:
+            code = self.get_chejan_data(Type.REAL['잔고']['종목코드'])[1:]
+
         if code not in self.jango_dict.keys():
             self.jango_dict.update({code: {}})
 
         jango_dict_item = self.jango_dict[code]
         cols = ['현재가', '종목코드', '종목명', '보유수량', '주문가능수량', '매입단가',
-                '총매입가', '매도/매수구분', '(최우선)매도호가', '(최우선)매수호가']
+                '총매입가', '매도매수구분', '(최우선)매도호가', '(최우선)매수호가']
 
         for col in cols:
-            col_data = self.get_chejan_data("잔고", col)
+            col_data = self.get_chejan_data(Type.REAL['잔고'][col])
 
             if col == '보유수량' and col_data == 0:
                 del self.jango_dict[code]
@@ -261,7 +263,7 @@ class Kiwoom(QAxWidget):
                 jango_dict_item.update({col: abs(int(col_data.strip()))})
             elif col in ['보유수량', '주문가능수량', '매입단가', '총매입가']:
                 jango_dict_item.update({col: int(col_data.strip())})
-            elif col == '매도/매수구분':
+            elif col == '매도매수구분':
                 jango_dict_item.update({col: col_data.strip().lstrip("+").lstrip("-")})
             else:
                 jango_dict_item.update({col: col_data.strip()})
@@ -459,7 +461,7 @@ class Kiwoom(QAxWidget):
                                        [request_name, screen_no, account_no, order_type, code, qty, price, hoga_type, origin_order_no])
         return return_code
 
-    def get_chejan_data(self, sRealType, nFid):
+    def get_chejan_data(self, nFid):
         ret = self.dynamicCall("GetChejanData(int)", nFid)
         return ret
 
