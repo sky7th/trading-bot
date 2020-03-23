@@ -131,7 +131,7 @@ class Kiwoom(QAxWidget):
             self.cancel_mystock_not_concluded(sCode)
 
     def print_market_status(self, sCode, sRealType):
-        status_code = self.get_comm_real_data(sCode, Type.REAL[sRealType]["장운영구분"])
+        status_code = self.get_comm_real_data(sCode, sRealType, "장운영구분")
 
         if status_code == Type.NUM["시작전"]:
             print("장 시작 전")
@@ -146,28 +146,26 @@ class Kiwoom(QAxWidget):
         if sCode not in self.portfolio_stock_dict:
             self.portfolio_stock_dict.update({sCode: {}})
 
+        portfolio_stock_dict_item = self.portfolio_stock_dict[sCode]
         cols = ['체결시간', '현재가', '전일대비', '등락율', '(최우선)매도호가',
                 '(최우선)매수호가', '거래량', '누적거래량', '고가', '시가', '저가']
         for col in cols:
             col_data = self.get_comm_real_data(sCode, sRealType, col)
             if col == '체결시간':
-                self.portfolio_stock_dict[sCode].update({col: col_data})
+                portfolio_stock_dict_item.update({col: col_data})
             elif col == '등락율':
-                self.portfolio_stock_dict[sCode].update({col: float(col_data)})
+                portfolio_stock_dict_item.update({col: float(col_data)})
             else:
-                self.portfolio_stock_dict[sCode].update({col: abs(int(col_data))})
+                portfolio_stock_dict_item.update({col: abs(int(col_data))})
 
     def trade(self, sCode):
-        my_stock = self.mystock_dict[sCode]
-        now_stock = self.portfolio_stock_dict[sCode]
-
         if sCode in self.mystock_dict.keys() and sCode not in self.jango_dict.keys():
-            self.sell_mystock(sCode, my_stock, now_stock)
+            self.sell_mystock(sCode, self.mystock_dict[sCode], self.portfolio_stock_dict[sCode])
 
         elif sCode in self.jango_dict.keys():
             self.sell_jango(sCode)
         else:
-            self.buy_new_stock(sCode, my_stock, now_stock)
+            self.buy_new_stock(sCode, self.portfolio_stock_dict[sCode])
 
     def sell_mystock(self, sCode, my_stock, now_stock):
         my_fluctuation = (now_stock["현재가"] - my_stock["매입가"]) / my_stock["매입가"] * 100
@@ -185,7 +183,7 @@ class Kiwoom(QAxWidget):
         print("%s %s" % ("잔고 내 신규매도를 함", sCode))
         # TODO: 잔고 주식 매도
 
-    def buy_new_stock(self, sCode, my_stock, now_stock):
+    def buy_new_stock(self, sCode, now_stock):
         if now_stock["등락율"] > 2.0 and sCode not in self.jango_dict:
             print("%s %s" % ("신규매수를 함", sCode))
             # TODO: 신규 매수
@@ -223,7 +221,7 @@ class Kiwoom(QAxWidget):
         if order_number not in self.mystock_not_concluded_dict.keys():
             self.mystock_not_concluded_dict.update({order_number: {}})
 
-        portfolio_stock_dict_item = self.portfolio_stock_dict[order_number]
+        mystock_not_concluded_dict_item = self.mystock_not_concluded_dict[order_number]
         cols = ['종목코드', '종목명', '원주문번호', '주문번호', '주문상태',
                 '주문수량', '주문가격', '미체결수량', '주문구분', '주문/체결시간',
                 '체결가', '체결량', '현재가', '(최우선)매도호가', '(최우선)매수호가']
@@ -232,15 +230,15 @@ class Kiwoom(QAxWidget):
             col_data = self.get_chejan_data("주문체결", col)
 
             if col == '종목코드':
-                portfolio_stock_dict_item.update({col: col_data[1:].strip()})
+                mystock_not_concluded_dict_item.update({col: col_data[1:].strip()})
             elif col == '주문구분':
-                portfolio_stock_dict_item.update({col: col_data.strip().lstrip("+").lstrip("-")})
+                mystock_not_concluded_dict_item.update({col: col_data.strip().lstrip("+").lstrip("-")})
             elif col in ['체결가', '체결량']:
-                portfolio_stock_dict_item.update({col: 0 if col_data == "" else int(col_data)})
+                mystock_not_concluded_dict_item.update({col: 0 if col_data == "" else int(col_data)})
             elif col in ['주문수량', '주문가격', '미체결수량', '현재가', '(최우선)매도호가', '(최우선)매수호가']:
-                portfolio_stock_dict_item.update({col: abs(int(col_data))})
+                mystock_not_concluded_dict_item.update({col: abs(int(col_data))})
             else:
-                portfolio_stock_dict_item.update({col: col_data.strip()})
+                mystock_not_concluded_dict_item.update({col: col_data.strip()})
 
     def update_jango_by_real(self):
         code = self.get_chejan_data("잔고", '종목코드')[1:]
