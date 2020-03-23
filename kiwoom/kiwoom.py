@@ -27,6 +27,7 @@ class Kiwoom(QAxWidget):
         self.total_profit_loss_rate = None
         self.mystock_dict = {}
         self.mystock_not_concluded_dict = {}
+        self.analyzed_stocks = {}
         self.portfolio_stock_dict = {}
         self.jango_dict = {}
 
@@ -56,6 +57,7 @@ class Kiwoom(QAxWidget):
         self.set_portfolio_stock_dict()  # 스크린 번호를 할당
 
         self.real_signal_market_start_time()  # 장시작시간
+
         self.real_signal_stock_conclusion()  # 주식체결
 
         print("내 계좌번호: %s" % self.account_num)
@@ -160,33 +162,46 @@ class Kiwoom(QAxWidget):
 
     def trade(self, sCode):
         if sCode in self.mystock_dict.keys() and sCode not in self.jango_dict.keys():
-            self.sell_mystock(sCode, self.mystock_dict[sCode], self.portfolio_stock_dict[sCode])
-
+            self.sell_before_stock(sCode, self.mystock_dict[sCode], self.portfolio_stock_dict[''])
         elif sCode in self.jango_dict.keys():
-            self.sell_jango(sCode)
-        else:
-            self.buy_new_stock(sCode, self.portfolio_stock_dict[sCode])
+            self.sell_today_stock(sCode, self.jango_dict[sCode], self.portfolio_stock_dict[sCode])
 
-    def sell_mystock(self, sCode, my_stock, now_stock):
+        if sCode not in self.jango_dict.keys():
+            self.buy_today_stock(sCode, self.jango_dict[sCode], self.portfolio_stock_dict[sCode])
+
+    def sell_before_stock(self, sCode, my_stock, now_stock):
         my_fluctuation = (now_stock["현재가"] - my_stock["매입가"]) / my_stock["매입가"] * 100
         if my_stock["매매가능수량"] > 0 and (my_fluctuation > 5 or my_fluctuation < -5):
-            order_success = self.send_order("신규매도", self.portfolio_stock_dict[sCode]["주문용스크린번호"], self.account_num, 2,
-                                            sCode, my_stock["매매가능수량"], 0, Type.SEND["거래구분"]["시장가"], "")
-            if order_success == ReturnCode.OP_ERR_NONE:
-                print("매도주문 전달 성공")
-                # TODO: 매도 주문 검증 절차
-                del my_stock
-            else:
-                print("매도주문 전달 실패(%s)" % ReturnCode.CAUSE[order_success])
+            self.sell_order_process(sCode, my_stock, my_stock["매매가능수량"])
 
-    def sell_jango(self, sCode):
-        print("%s %s" % ("잔고 내 신규매도를 함", sCode))
-        # TODO: 잔고 주식 매도
+    def sell_today_stock(self, sCode, my_stock, now_stock):
+        if False: # TODO: 오늘 산 종목 목록에 있을 경우의 매도 조건
+            self.sell_order_process(sCode, my_stock, my_stock["매매가능수량"])
 
-    def buy_new_stock(self, sCode, now_stock):
-        if now_stock["등락율"] > 2.0 and sCode not in self.jango_dict:
-            print("%s %s" % ("신규매수를 함", sCode))
-            # TODO: 신규 매수
+    def sell_order_process(self, sCode, dict_item, quantity):
+        order_success = self.send_order("신규매도", self.portfolio_stock_dict[sCode]["주문용스크린번호"], self.account_num, 2,
+                                        sCode, quantity, 0, Type.SEND["거래구분"]["시장가"], "")
+        if order_success == ReturnCode.OP_ERR_NONE:
+            print("매도주문 전달 성공")
+            # TODO: 매도 주문 검증 절차
+            del dict_item
+        else:
+            print("매도주문 전달 실패(%s)" % ReturnCode.CAUSE[order_success])
+
+    def buy_today_stock(self, sCode, jango_dict, now_stock):
+        if now_stock["등락율"] > 2.0:
+            buy_quantity = int(self.use_money / len(self.analyzed_stocks))
+            self.buy_order_process(sCode, jango_dict, buy_quantity, now_stock)
+
+    def buy_order_process(self, sCode, jango_dict, quantity, now_stock):
+        order_success = self.send_order("신규매수", self.portfolio_stock_dict[sCode]["주문용스크린번호"], self.account_num, 1,
+                                        sCode, quantity, now_stock['(최우선)매도호가'], Type.SEND["거래구분"]["시장가"], "")
+        if order_success == ReturnCode.OP_ERR_NONE:
+            print("매수주문 전달 성공")
+            # TODO: 매수 주문 검증 절차
+            self.update_jango_by_real(sCode)
+        else:
+            print("매수주문 전달 실패(%s)" % ReturnCode.CAUSE[order_success])
 
     def cancel_mystock_not_concluded(self, sCode):
         not_selling_list = list(self.mystock_not_concluded_dict)
@@ -310,7 +325,6 @@ class Kiwoom(QAxWidget):
         self.deposit = self.get_comm_data(sTrCode, sRQName, 0, "예수금")
         self.deposit_ok = self.get_comm_data(sTrCode, sRQName, 0, "출금가능금액")
         self.use_money = int(self.deposit) * self.USE_MONEY_PERCENT
-        self.use_money = self.use_money / 4
 
     def set_mystock_not_concluded_details(self, sRQName, sTrCode):  # 미체결 요청
         row_size = self.get_repeat_cnt(sTrCode, sRQName)
@@ -395,7 +409,9 @@ class Kiwoom(QAxWidget):
         self.request_loop.exec_()
 
     def set_portfolio_stock_dict(self):
-        combined_list = list(self.mystock_dict.keys()) + list(utils.read_stock_info().keys())
+        self.analyzed_stocks = utils.read_stock_info()
+        combined_list = list(self.analyzed_stocks.keys())
+        combined_list += list(self.mystock_dict.keys())
         combined_list += [self.mystock_not_concluded_dict[order_no]["종목코드"] for order_no in list(self.mystock_not_concluded_dict.keys())]
         set_list = list(set(combined_list))
 
