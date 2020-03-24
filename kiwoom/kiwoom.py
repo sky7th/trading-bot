@@ -162,12 +162,12 @@ class Kiwoom(QAxWidget):
 
     def trade(self, sCode):
         if sCode in self.mystock_dict.keys() and sCode not in self.jango_dict.keys():
-            self.sell_before_stock(sCode, self.mystock_dict[sCode], self.portfolio_stock_dict[''])
+            self.sell_before_stock(sCode, self.mystock_dict[sCode], self.portfolio_stock_dict[sCode])
         elif sCode in self.jango_dict.keys():
             self.sell_today_stock(sCode, self.jango_dict[sCode], self.portfolio_stock_dict[sCode])
 
         if sCode not in self.jango_dict.keys():
-            self.buy_today_stock(sCode, self.jango_dict[sCode], self.portfolio_stock_dict[sCode])
+            self.buy_today_stock(sCode, self.portfolio_stock_dict[sCode])
 
     def sell_before_stock(self, sCode, my_stock, now_stock):
         my_fluctuation = (now_stock["현재가"] - my_stock["매입가"]) / my_stock["매입가"] * 100
@@ -188,20 +188,38 @@ class Kiwoom(QAxWidget):
         else:
             print("매도주문 전달 실패(%s)" % ReturnCode.CAUSE[order_success])
 
-    def buy_today_stock(self, sCode, jango_dict, now_stock):
-        if now_stock["등락율"] > 2.0:
-            buy_quantity = int(self.use_money / len(self.analyzed_stocks))
-            self.buy_order_process(sCode, jango_dict, buy_quantity, now_stock)
+    def sell_order_cancel_process(self, sCode):
+        order_success = self.send_order("매도취소", self.portfolio_stock_dict[sCode]["주문용스크린번호"], self.account_num, 4,
+                                        sCode, 0, 0, Type.SEND["거래구분"]["시장가"], "")
+        if order_success == ReturnCode.OP_ERR_NONE:
+            print("매도취소 성공")
+            # TODO: 매도 취소 검증 절차
+        else:
+            print("매도취소 실패(%s)" % ReturnCode.CAUSE[order_success])
 
-    def buy_order_process(self, sCode, jango_dict, quantity, now_stock):
+    def buy_today_stock(self, sCode, portfolio_stock):
+        if portfolio_stock["등락율"] > 2.0:
+            buy_quantity = self.use_money // len(self.analyzed_stocks) // portfolio_stock['(최우선)매도호가']
+            print(buy_quantity, portfolio_stock['(최우선)매도호가'])
+            self.buy_order_process(sCode, int(buy_quantity), portfolio_stock)
+
+    def buy_order_process(self, sCode, quantity, portfolio_stock):
         order_success = self.send_order("신규매수", self.portfolio_stock_dict[sCode]["주문용스크린번호"], self.account_num, 1,
-                                        sCode, quantity, now_stock['(최우선)매도호가'], Type.SEND["거래구분"]["시장가"], "")
+                                        sCode, quantity, portfolio_stock['(최우선)매도호가'], Type.SEND["거래구분"]["시장가"], "")
         if order_success == ReturnCode.OP_ERR_NONE:
             print("매수주문 전달 성공")
             # TODO: 매수 주문 검증 절차
-            self.update_jango_by_real(sCode)
         else:
             print("매수주문 전달 실패(%s)" % ReturnCode.CAUSE[order_success])
+
+    def buy_order_cancel_process(self, sCode):
+        order_success = self.send_order("매수취소", self.portfolio_stock_dict[sCode]["주문용스크린번호"], self.account_num, 3,
+                                        sCode, 0, 0, Type.SEND["거래구분"]["시장가"], "")
+        if order_success == ReturnCode.OP_ERR_NONE:
+            print("매수취소 성공", sCode)
+            # TODO: 매수 취소 검증 절차
+        else:
+            print("매수취소 실패(%s)" % ReturnCode.CAUSE[order_success])
 
     def cancel_mystock_not_concluded(self, sCode):
         not_selling_list = list(self.mystock_not_concluded_dict)
@@ -218,14 +236,14 @@ class Kiwoom(QAxWidget):
             elif not_conclusion_quantity == 0:
                 del self.mystock_not_concluded_dict[order_num]
 
-            if order_classification == "매도" and not_conclusion_quantity > 0 and self.portfolio_stock_dict[sCode]["(최우선)매수호가"] < my_order_price:
-                print("%s %s" % ("매도취소 한다", sCode))
-                # Todo: 미체결 주식 매도 취소
-            elif not_conclusion_quantity == 0:
-                del self.mystock_not_concluded_dict[order_num]
+            # if order_classification == "매도" and not_conclusion_quantity > 0 and self.portfolio_stock_dict[sCode]["(최우선)매수호가"] < my_order_price:
+            #     print("%s %s" % ("매도취소 한다", sCode))
+            #     self.sell_order_cancel_process(sCode)
+            # elif not_conclusion_quantity == 0:
+            #     del self.mystock_not_concluded_dict[order_num]
 
     def chejan_slot(self, sGubun, nItemCnt, sFidList):
-        if sGubun == Type.NUM["미체결"]:
+        if sGubun == Type.NUM["주문미체결"]:
             self.update_mystock_not_concluded_by_real()
 
         elif sGubun == Type.NUM["잔고"]:
@@ -398,7 +416,7 @@ class Kiwoom(QAxWidget):
             self.signal_bars_of_day(code)
 
     def signal_bars_of_day(self, code=None, date=None, sPrevNext=Type.NUM["처음"]):
-        QTest.qWait(2000)
+        QTest.qWait(200)
         self.set_input_value("종목코드", code)
         self.set_input_value("수정주가구분", Type.NUM["수정후"])
 
@@ -473,6 +491,7 @@ class Kiwoom(QAxWidget):
     # 1초에 5회까지 주문 허용                                          #
     ###############################################################
     def send_order(self, request_name, screen_no, account_no, order_type, code, qty, price, hoga_type, origin_order_no):
+        QTest.qWait(200)
         return_code = self.dynamicCall("SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)",
                                        [request_name, screen_no, account_no, order_type, code, qty, price, hoga_type, origin_order_no])
         return return_code
@@ -491,37 +510,3 @@ class Kiwoom(QAxWidget):
     def get_code_list_by_market(self, market_code):
         code_list = self.dynamicCall("GetCodeListByMarket(QString)", market_code)
         return code_list.split(";")[:-1]
-
-    def signal_bars_of_day(self, code=None, date=None, sPrevNext=Type.NUM["처음"]):
-        QTest.qWait(1600)
-        self.dynamicCall("SetInputValue(QString, QString)", "종목코드", code)
-        self.dynamicCall("SetInputValue(QString, QString)", "수정주가구분", Type.NUM["수정후"])
-
-        if date != None:
-            self.dynamicCall("SetInputValue(QString, QString)", "기준일자", date)
-
-        self.dynamicCall("CommRqData(QString, QString, int, QString", "주식일봉차트조회", "opt10081", sPrevNext, self.SCREEN_CALCULATION_STOCK)  # Tr서버로 전송 - Transaction
-        self.analysis_event_loop.exec_()
-
-    def set_portfolio_stock_dict(self):
-        combined_list = list(self.mystock_dict.keys()) + list(utils.read_stock_info().keys())
-        combined_list += [self.mystock_not_concluded_dict[order_no]["종목코드"] for order_no in list(self.mystock_not_concluded_dict.keys())]
-        set_list = list(set(combined_list))
-
-        for idx, code in enumerate(set_list):
-            screen_num = int(self.SCREEN_REAL_STOCK)
-            selling_screen_num = int(self.SCREEN_REAL_SELLING_STOCK)
-
-            if (idx % 50) == 0:
-                screen_num += 1
-                self.SCREEN_REAL_STOCK = str(screen_num)
-
-            if (idx % 50) == 0:
-                selling_screen_num += 1
-                self.SCREEN_REAL_SELLING_STOCK = str(selling_screen_num)
-
-            if code in self.portfolio_stock_dict.keys():
-                self.portfolio_stock_dict[code].update({"스크린번호": str(self.SCREEN_REAL_STOCK)})
-                self.portfolio_stock_dict[code].update({"주문용스크린번호": str(self.SCREEN_REAL_SELLING_STOCK)})
-            else:
-                self.portfolio_stock_dict.update({code: {"스크린번호": str(self.SCREEN_REAL_STOCK), "주문용스크린번호": str(self.SCREEN_REAL_SELLING_STOCK)}})
