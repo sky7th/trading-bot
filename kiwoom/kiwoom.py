@@ -171,18 +171,19 @@ class Kiwoom(QAxWidget):
 
     def sell_before_stock(self, sCode, my_stock, now_stock):
         my_fluctuation = (now_stock["현재가"] - my_stock["매입가"]) / my_stock["매입가"] * 100
-        if my_stock["매매가능수량"] > 0 and (my_fluctuation > 5 or my_fluctuation < -5):
+        if my_stock["매매가능수량"] > 0 and (my_fluctuation > 2 or my_fluctuation < -2):
             self.sell_order_process(sCode, my_stock, my_stock["매매가능수량"])
 
-    def sell_today_stock(self, sCode, my_stock, now_stock):
-        if False: # TODO: 오늘 산 종목 목록에 있을 경우의 매도 조건
-            self.sell_order_process(sCode, my_stock, my_stock["매매가능수량"])
+    def sell_today_stock(self, sCode, jango_dict, now_stock):
+        my_fluctuation = (now_stock["현재가"] - jango_dict["매입단가"]) / jango_dict["매입단가"] * 100
+        if jango_dict["보유수량"] > 0 and (my_fluctuation > 2 or my_fluctuation < -2):
+            self.sell_order_process(sCode, jango_dict, jango_dict["보유수량"])
 
     def sell_order_process(self, sCode, dict_item, quantity):
         order_success = self.send_order("신규매도", self.portfolio_stock_dict[sCode]["주문용스크린번호"], self.account_num, 2,
                                         sCode, quantity, 0, Type.SEND["거래구분"]["시장가"], "")
         if order_success == ReturnCode.OP_ERR_NONE:
-            print("매도주문 전달 성공")
+            print("매도주문 전달 성공", sCode)
             # TODO: 매도 주문 검증 절차
             del dict_item
         else:
@@ -192,14 +193,14 @@ class Kiwoom(QAxWidget):
         order_success = self.send_order("매도취소", self.portfolio_stock_dict[sCode]["주문용스크린번호"], self.account_num, 4,
                                         sCode, 0, 0, Type.SEND["거래구분"]["시장가"], "")
         if order_success == ReturnCode.OP_ERR_NONE:
-            print("매도취소 성공")
+            print("매도취소 성공", sCode)
             # TODO: 매도 취소 검증 절차
         else:
             print("매도취소 실패(%s)" % ReturnCode.CAUSE[order_success])
 
     def buy_today_stock(self, sCode, portfolio_stock):
         if portfolio_stock["등락율"] > 2.0:
-            buy_quantity = self.use_money // len(self.analyzed_stocks) // portfolio_stock['(최우선)매도호가']
+            buy_quantity = (self.use_money // len(self.analyzed_stocks)) // portfolio_stock['(최우선)매도호가']
             print(buy_quantity, portfolio_stock['(최우선)매도호가'])
             self.buy_order_process(sCode, int(buy_quantity), portfolio_stock)
 
@@ -207,7 +208,7 @@ class Kiwoom(QAxWidget):
         order_success = self.send_order("신규매수", self.portfolio_stock_dict[sCode]["주문용스크린번호"], self.account_num, 1,
                                         sCode, quantity, portfolio_stock['(최우선)매도호가'], Type.SEND["거래구분"]["시장가"], "")
         if order_success == ReturnCode.OP_ERR_NONE:
-            print("매수주문 전달 성공")
+            print("매수주문 전달 성공", sCode)
             # TODO: 매수 주문 검증 절차
         else:
             print("매수주문 전달 실패(%s)" % ReturnCode.CAUSE[order_success])
@@ -226,13 +227,13 @@ class Kiwoom(QAxWidget):
 
         for order_num in not_selling_list:
             code = self.mystock_not_concluded_dict[order_num]["종목코드"]
-            my_order_price = self.mystock_not_concluded_dict[order_num]["주문가격"]
+            my_order_price = self.mystock_not_concluded_dict[order_num]["(최우선)매도호가"]
             not_conclusion_quantity = self.mystock_not_concluded_dict[order_num]["미체결수량"]
             order_classification = self.mystock_not_concluded_dict[order_num]["주문구분"]
 
-            if order_classification == "매수" and not_conclusion_quantity > 0 and self.portfolio_stock_dict[sCode]["(최우선)매도호가"] > my_order_price:
-                print("%s %s" % ("매수취소 한다", sCode))
-                # Todo: 미체결 주식 매수 취소
+            if order_classification == "매수" and not_conclusion_quantity > 0 and self.portfolio_stock_dict[code]["(최우선)매도호가"] > my_order_price:
+                print('취소할 주문번호: ', order_num, self.portfolio_stock_dict[code]["(최우선)매도호가"], my_order_price, '미체결 리스트: ', not_selling_list)
+                self.buy_order_cancel_process(code)
             elif not_conclusion_quantity == 0:
                 del self.mystock_not_concluded_dict[order_num]
 
@@ -261,7 +262,7 @@ class Kiwoom(QAxWidget):
 
         for col in cols:
             col_data = self.get_chejan_data(Type.REAL['주문체결'][col])
-
+            # print(col, col_data)
             if col == '종목코드':
                 mystock_not_concluded_dict_item.update({col: col_data[1:].strip()})
             elif col == '주문구분':
@@ -272,6 +273,7 @@ class Kiwoom(QAxWidget):
                 mystock_not_concluded_dict_item.update({col: abs(int(col_data))})
             else:
                 mystock_not_concluded_dict_item.update({col: col_data.strip()})
+        print('추가된 미체결: ', order_number, mystock_not_concluded_dict_item)
 
     def update_jango_by_real(self, code=None):
         if code is None:
@@ -300,6 +302,7 @@ class Kiwoom(QAxWidget):
                 jango_dict_item.update({col: col_data.strip().lstrip("+").lstrip("-")})
             else:
                 jango_dict_item.update({col: col_data.strip()})
+        print('추가된 잔고: ', jango_dict_item)
 
     def signal_login_commConnect(self):
         self.dynamicCall('CommConnect()')
