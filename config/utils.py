@@ -7,6 +7,11 @@ def save_stock_info(code, code_nm, price):
     f.close()
 
 
+def delete_stock_info():
+    if os.path.isfile('files/condition_stock.txt'):
+        os.remove('files/condition_stock.txt')
+
+
 def read_stock_info():
     portfolio_stock_dict = {}
 

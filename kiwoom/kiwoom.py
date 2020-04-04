@@ -1,3 +1,5 @@
+import sys
+
 from PyQt5.QAxContainer import *
 from PyQt5.QtCore import *
 from PyQt5.QtTest import *
@@ -52,12 +54,9 @@ class Kiwoom(QAxWidget):
         self.signal_account_detail_mystock()  # 계좌평가잔고내역요청
         self.signal_account_detail_mystock_not_concluded()  # 실시간미체결요청
 
-        # self.analyze_chart()  # 종목 분석용, 임시용으로 실행
-
         self.set_portfolio_stock_dict()  # 스크린 번호를 할당
 
         self.real_signal_market_start_time()  # 장시작시간
-
         self.real_signal_stock_conclusion()  # 주식체결
 
         print("내 계좌번호: %s" % self.account_num)
@@ -144,6 +143,14 @@ class Kiwoom(QAxWidget):
         elif status_code == Type.NUM["종료"]:
             print("3시 30분 장 종료")
 
+            for code in self.portfolio_stock_dict.keys():
+                self.set_real_remove(self.portfolio_stock_dict[code]['스크린번호'], code)
+
+            QTest.qWait(5000)
+            utils.delete_stock_info()
+            self.analyze_chart()
+            sys.exit()
+
     def update_portfolio_by_real_stock_conclusion(self, sCode, sRealType):
         if sCode not in self.portfolio_stock_dict:
             self.portfolio_stock_dict.update({sCode: {}})
@@ -199,7 +206,7 @@ class Kiwoom(QAxWidget):
             print("매도취소 실패(%s)" % ReturnCode.CAUSE[order_success])
 
     def buy_today_stock(self, sCode, portfolio_stock):
-        if portfolio_stock["등락율"] > 2.0:
+        if 2.0 < portfolio_stock["등락율"] < 4.0:
             buy_quantity = (self.use_money // len(self.analyzed_stocks)) // portfolio_stock['(최우선)매도호가']
             print(buy_quantity, portfolio_stock['(최우선)매도호가'])
             self.buy_order_process(sCode, int(buy_quantity), portfolio_stock)
